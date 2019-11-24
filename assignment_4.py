@@ -37,13 +37,10 @@ class Deck:
 
     def shuffle(self):
         random.shuffle(self.cards)
-
     def draw_card(self):
         card = self.cards[0]
         self.cards.pop(0)
         return card
-
-
 class Player:
     """
         Player class to create a player object.
@@ -52,6 +49,59 @@ class Player:
         All the player names should be unique or else you will get error.
 
     """
+    def get_action_taken(self, action_type='pick', pile=[]):
+        r = None
+        if action_type=='pick':
+            r= np.random.choice(1)
+            card_pile = pile[-1]
+            card_pile_rank = card_pile.rank_to_val
+            card_stash_rank_list = []
+            for card in self.stash:
+                card_stash_rank_list.append(card.rank_to_val)
+            if card_pile_rank in card_stash_rank_list:
+                r = 0
+                return r
+            else:
+                r = 1
+                return r
+        else: # drop
+            r= np.random.choice(4)
+            card_stash_rank_list = []
+            for card in self.stash:
+                card_stash_rank_list.append(card.rank_to_val)
+            d={}
+            for rank in card_stash_rank_list:
+                if rank in d.keys():
+                    d[rank] +=1
+                else:
+                    d[rank] = 1
+            single_list=[]
+            double_list=[]
+            for k,v in d.items():
+                if v==1:
+                    single_list.append(k)
+                else:
+                    if k not in double_list:
+                        double_list.append(k)
+            if len(single_list) != 0:
+                max = -1
+                for elem in single_list:
+                    if elem > max:
+                        max = elem
+                for i in range(4):
+                    if self.stash[i].rank_to_val == max:
+                        r = i
+                        return r
+            else:
+                max = -1
+                for elem in double_list:
+                    if elem > max:
+                        max = elem
+                for i in range(4):
+                    if self.stash[i].rank_to_val == max:
+                        r = i
+                        return r
+        return r
 
     def __init__(self, name, stash=list(), isBot=False, points=0, conn=None):
         self.stash = stash
@@ -228,7 +278,7 @@ class RummyAgent():
 
 
 if __name__ == '__main__':
-    p1 = Player('tabish', list())
+    p1 = Player('jawad', list())
     p2 = Player('comp1', list(), isBot=True)
     rummy = RummyAgent([p1, p2], max_card_length=3, max_turns=20)
 
@@ -238,12 +288,12 @@ if __name__ == '__main__':
         for player in rummy.players:
             player.points = player.stash_score()
 
-        rummy.reset(rummy.players)
+        rummy.reset(rummy.players, max_turns=20)
         random.shuffle(rummy.players)
         # int i = 0
         if debug:
             print(f'**********************************\n\t\tGame Starts : {j}\n***********************************')
-        while not rummy.play():
+        while not rummy.play(): # play means stop
             rummy._update_turn()
             print(rummy.max_turns)
             for player in rummy.players:
@@ -264,32 +314,37 @@ if __name__ == '__main__':
                     if debug:
                         print(f'{player.name} Plays')
                     player_info = player.get_info(debug)
-                    action_taken = np.random.choice(1)
+
+                    #TODO:1s action taken has to be changed
+                    action_taken = player.get_action_taken(action_type='pick', pile=rummy.pile)
+                    # action_taken = np.random.choice(1)
                     if debug:
                         print(f'Card in pile {player_info["PileSuit"]}{player_info["PileRank"]}')
-                    result_1 = rummy.pick_card(player, action_taken)
+                    result_1 = rummy.pick_card(player, action_taken) # pick and check to meld
                     result_1 = result_1["reward"]
-
+                    #1e action taken has to be changed:end
                     if debug:
                         print(f'{player.name} takes action {action_taken}')
                     # player stash will have no cards if the player has melded them
                     # When you have picked up a card and you have drop it since the remaining cards have been melded.
+
                     if len(player.stash) == 1:
                         rummy.drop_card(player, player.stash[0])
                         if debug:
                             print(f'{player.name} Wins the round')
-
                     elif len(player.stash) != 0:
-
+                    #TODO:2s action drop
                         player_info = player.get_info(debug)
                         s = player_info['CardRanks']
-                        action_taken = np.random.choice(4)
+                        action_taken = player.get_action_taken(action_type='drop', pile=rummy.pile)
+                        # action_taken = np.random.choice(4)
                         card = player.stash[action_taken]
                         if debug:
                             print(f'{player.name} drops card {card}')
 
                         result_1 = rummy.drop_card(player, card)
                         result_1 = result_1["reward"]
+                    #2e
                     #                             pdb.set_trace()
                     else:
                         if debug:
