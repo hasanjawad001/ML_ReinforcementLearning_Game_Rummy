@@ -278,77 +278,258 @@ class RummyAgent():
 
 
 if __name__ == '__main__':
-    p1 = Player('jawad', list())
-    p2 = Player('comp1', list(), isBot=True)
-    rummy = RummyAgent([p1, p2], max_card_length=3, max_turns=20)
 
-    maxiter = 1
-    debug = True
-    for j in range(maxiter):
-        for player in rummy.players:
-            player.points = player.stash_score()
+    ######################################### BASICS OF VALUE AND POLICY ITERATION
+    gamma = 1.0
+    n_states = 4
+    n_actions = 2
 
-        rummy.reset(rummy.players, max_turns=20)
-        random.shuffle(rummy.players)
-        # int i = 0
-        if debug:
-            print(f'**********************************\n\t\tGame Starts : {j}\n***********************************')
-        while not rummy.play(): # play means stop
-            rummy._update_turn()
-            print(rummy.max_turns)
-            for player in rummy.players:
-                if player.isBot:
-                    if rummy.play():
-                        continue
-                    if debug:
-                        print(f'{player.name} Plays')
-                    rummy.computer_play(player)
-                    if debug:
-                        player.get_info(debug)
-                        if player.stash == 0:
-                            print(f'{player.name} wins the round')
+    # value vector
+    V = np.zeros(n_states).reshape((-1, 1))
+    # Reward dictionary: key (action, from, to) // action wise
+    R = {
+        (0, 0, 0): 20,
+        (0, 1, 1): 5,
+        (0, 2, 2): 3,
+        (0, 3, 3): 2,
 
-                else:
-                    if rummy.play():
-                        continue
-                    if debug:
-                        print(f'{player.name} Plays')
-                    player_info = player.get_info(debug)
+        (1, 0, 1): -5,
+        (1, 1, 2): -5,
+        (1, 2, 3): -5,
 
-                    #TODO:1s action taken has to be changed
-                    action_taken = player.get_action_taken(action_type='pick', pile=rummy.pile)
-                    # action_taken = np.random.choice(1)
-                    if debug:
-                        print(f'Card in pile {player_info["PileSuit"]}{player_info["PileRank"]}')
-                    result_1 = rummy.pick_card(player, action_taken) # pick and check to meld
-                    result_1 = result_1["reward"]
-                    #1e action taken has to be changed:end
-                    if debug:
-                        print(f'{player.name} takes action {action_taken}')
-                    # player stash will have no cards if the player has melded them
-                    # When you have picked up a card and you have drop it since the remaining cards have been melded.
+        (-1, 3, 2): 10,
+        (-1, 2, 1): 10,
+        (-1, 1, 0): 10,
+    }
+    # transition probability: key (action, from, to) // state wise
+    P = {
+        (0, 0, 0): 0.5,
+        (1, 0, 1): 0.5,
 
-                    if len(player.stash) == 1:
-                        rummy.drop_card(player, player.stash[0])
-                        if debug:
-                            print(f'{player.name} Wins the round')
-                    elif len(player.stash) != 0:
-                    #TODO:2s action drop
-                        player_info = player.get_info(debug)
-                        s = player_info['CardRanks']
-                        action_taken = player.get_action_taken(action_type='drop', pile=rummy.pile)
-                        # action_taken = np.random.choice(4)
-                        card = player.stash[action_taken]
-                        if debug:
-                            print(f'{player.name} drops card {card}')
+        (-1, 1, 0): 0.33,
+        (0, 1, 1): 0.34,
+        (1, 1, 2): 0.33,
 
-                        result_1 = rummy.drop_card(player, card)
-                        result_1 = result_1["reward"]
-                    #2e
-                    #                             pdb.set_trace()
-                    else:
-                        if debug:
-                            print(f'{player.name} Wins the round')
-                    if debug:
-                        player.get_info(debug)
+        (-1, 2, 1): 0.33,
+        (0, 2, 2): 0.34,
+        (1, 2, 3): 0.33,
+
+        (-1, 3, 3): 0.5,
+        (0, 3, 3): 0.5,
+    }
+
+    def Rf(s, sn, a):
+        if (a, s, sn) in R:
+            return R[(a, s, sn)]
+        return 0
+
+    def Pf(s, sn, a):
+        if (a, s, sn) in P:
+            return P[(a,s,sn)]
+        return 0.
+
+    """ with no matrix"""
+    def Rs(s, a):
+        r = 0
+        for j in range(n_states):
+            if (a, s, j) in P:
+                r += P[(a, s, j)] * Rf(a,s, j)
+        return r
+
+    def Pfv(s, a):
+        ret = np.zeros(n_states).reshape((-1, 1))
+        for j in range(n_states):
+            if (a, s, j) in P:
+                ret[j] = P[(a, s, j)]
+        return ret
+
+    Rmat = np.zeros((n_states, n_actions))
+    Pmat = np.zeros((n_actions, n_states, n_states))
+
+    for i in range(n_states):
+        for k in range(n_actions):
+            for j in range(n_states):
+                if (k, i, j) in P:
+                    Rmat[i, k] += P[(k, i, j)] * Rf(i, j, k)
+
+    for k, i, j in P.keys():
+        Pmat[k, i, j] = P[(k, i, j)]
+
+    ############################################################ VALUE ITERATION 1.0 1st WAY MATRIX
+    # for t in range(5):
+    #     print("t=", t, "\tV = ", V.T)
+    #     # Bellman
+    #     newV = Rmat + gamma * np.sum(Pmat @ V, axis=2).T
+    #     # print(newV)
+    #     V[:] = np.max(newV, axis=1, keepdims=True)
+    #
+    # print("t=", t + 1, "\tV = ", V.T)
+
+    ############################################################ VALUE ITERATION 2.0 2nd WAY NORMAL
+    # gamma = 1
+    # for t in range(5):
+    #     print("t=", t, "\tV = ", V.T)
+    #     for i in range(n_states):
+    #         # Bellman
+    #         V[i] = max(
+    #             Rs(i, -1) + gamma * np.sum(Pfv(i, -1) * V),
+    #             Rs(i, 0) + gamma * np.sum(Pfv(i, 0) * V),
+    #             Rs(i, 1) + gamma * np.sum(Pfv(i, 1) * V)
+    #         )
+    # print("t=", t + 1, "\tV = ", V.T)
+
+    ############################################################ POLICY ITERATION
+    # n_iter = 10
+    # gamma = 1.
+    # V = np.zeros(n_states)
+    #
+    # pi = np.random.randint(-1, 2, size=n_states)
+    #
+    # for n in range(n_iter):
+    #     print("n = ", n, "\t", pi, end="")
+    #
+    #     # evaluate
+    #     for s in range(n_states):
+    #         V[s] = Rs(s, pi[s]) + gamma * np.sum([Pf(s, sn, pi[s]) * V[sn] for sn in range(n_states)])
+    #     print("\t", V)
+    #
+    #     # improve
+    #     for s in range(n_states):
+    #         pi[s] = np.argmax(
+    #             [Rs(s, a) + gamma * np.sum([Pf(s, sn, a) * V[sn] for sn in range(n_states)]) for a in range(n_actions)]
+    #         )
+
+    ############################################################ TEMPORAL DIFFERENCE LEARNING
+    import sys, time
+    # model (problem to solve)
+    # a: 0 - loop  1 - to next state
+    # r:       +1                 +0      +100 when reaches 4
+    #
+    n_states = 5
+    n_actions = 2
+
+
+    def transition(s, a):
+        s1 = s + a
+        if s == s1:
+            r = 1
+        elif s1 == n_states - 1:
+            r = 100
+        else:
+            r = 0
+        return s1, r
+
+
+    def pause_print():
+        sys.stdout.write('\r')
+        sys.stdout.write("\033[F")
+        sys.stdout.flush()
+        time.sleep(0.5)
+
+
+    # Example TD(0) Update
+    alpha = 1.0
+    gamma = 0.9
+    V = np.zeros(n_states)  # 5 states
+    pi = np.random.randint(n_actions, size=n_states) # (0, 2) meaning -> 0, 1
+
+    np.set_printoptions(precision=2)
+    for k in range(2):
+        if k == 1:  # on the second iteration it is taking always to next step
+            pi = np.ones(n_states, dtype=np.int)
+        print("Policy:", pi)
+        # Evaluation of the random policy
+        for e in range(20):
+            s = 0
+
+            print("\r\tTraj: ", s, end=" ")
+            for step in range(10):
+                a = pi[s]
+                s1, r1 = transition(s, a)
+                V[s] += alpha * (r1 + gamma * V[s1] - V[s])
+                s = s1
+
+                print(a, s, end=" ")
+                if s == n_states - 1:
+                    break
+
+            print("\t", V, end="\n")
+            # pause_print()
+        print()
+
+
+    ############################################################ RUMMY GAME
+    # p1 = Player('jawad', list())
+    # p2 = Player('comp1', list(), isBot=True)
+    # rummy = RummyAgent([p1, p2], max_card_length=3, max_turns=20)
+    #
+    # maxiter = 1
+    # debug = True
+    # for j in range(maxiter):
+    #     for player in rummy.players:
+    #         player.points = player.stash_score()
+    #
+    #     rummy.reset(rummy.players, max_turns=20)
+    #     random.shuffle(rummy.players)
+    #     # int i = 0
+    #     if debug:
+    #         print(f'**********************************\n\t\tGame Starts : {j}\n***********************************')
+    #     while not rummy.play(): # play means stop
+    #         rummy._update_turn()
+    #         print(rummy.max_turns)
+    #         for player in rummy.players:
+    #             if player.isBot:
+    #                 if rummy.play():
+    #                     continue
+    #                 if debug:
+    #                     print(f'{player.name} Plays')
+    #                 rummy.computer_play(player)
+    #                 if debug:
+    #                     player.get_info(debug)
+    #                     if player.stash == 0:
+    #                         print(f'{player.name} wins the round')
+    #
+    #             else:
+    #                 if rummy.play():
+    #                     continue
+    #                 if debug:
+    #                     print(f'{player.name} Plays')
+    #                 player_info = player.get_info(debug)
+    #
+    #                 #TODO:1s action taken has to be changed
+    #                 # action_taken = player.get_action_taken(action_type='pick', pile=rummy.pile)
+    #                 action_taken = np.random.choice(1)
+    #                 if debug:
+    #                     print(f'Card in pile {player_info["PileSuit"]}{player_info["PileRank"]}')
+    #                 result_1 = rummy.pick_card(player, action_taken) # pick and check to meld
+    #                 result_1 = result_1["reward"]
+    #                 #1e action taken has to be changed:end
+    #                 if debug:
+    #                     print(f'{player.name} takes action {action_taken}')
+    #                 # player stash will have no cards if the player has melded them
+    #                 # When you have picked up a card and you have drop it since the remaining cards have been melded.
+    #
+    #                 if len(player.stash) == 1:
+    #                     rummy.drop_card(player, player.stash[0])
+    #                     if debug:
+    #                         print(f'{player.name} Wins the round')
+    #                 elif len(player.stash) != 0:
+    #                 #TODO:2s action drop
+    #                     player_info = player.get_info(debug)
+    #                     s = player_info['CardRanks']
+    #                     # action_taken = player.get_action_taken(action_type='drop', pile=rummy.pile)
+    #                     action_taken = np.random.choice(4)
+    #                     card = player.stash[action_taken]
+    #                     if debug:
+    #                         print(f'{player.name} drops card {card}')
+    #
+    #                     result_1 = rummy.drop_card(player, card)
+    #                     result_1 = result_1["reward"]
+    #                 #2e
+    #                 #                             pdb.set_trace()
+    #                 else:
+    #                     if debug:
+    #                         print(f'{player.name} Wins the round')
+    #                 if debug:
+    #                     player.get_info(debug)
 
