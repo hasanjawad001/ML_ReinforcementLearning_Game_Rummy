@@ -228,26 +228,72 @@ class RummyAgent():
 
 
 if __name__ == '__main__':
-    # c1= Card('A', 'D')
-    # c2= Card('A', 'S')
+    p1 = Player('tabish', list())
+    p2 = Player('comp1', list(), isBot=True)
+    rummy = RummyAgent([p1, p2], max_card_length=3, max_turns=20)
 
-    # print(c1 == c2)
-    # print(str(c1))
-    # print(str(c2))
+    maxiter = 1
+    debug = True
+    for j in range(maxiter):
+        for player in rummy.players:
+            player.points = player.stash_score()
 
-    # d1 = Deck(1)
-    # print(len(d1.cards))
-    # d1.shuffle()
-    # c3 = d1.draw_card()
-    # print(str(c3))
-    # print(len(d1.cards))
+        rummy.reset(rummy.players)
+        random.shuffle(rummy.players)
+        # int i = 0
+        if debug:
+            print(f'**********************************\n\t\tGame Starts : {j}\n***********************************')
+        while not rummy.play():
+            rummy._update_turn()
+            print(rummy.max_turns)
+            for player in rummy.players:
+                if player.isBot:
+                    if rummy.play():
+                        continue
+                    if debug:
+                        print(f'{player.name} Plays')
+                    rummy.computer_play(player)
+                    if debug:
+                        player.get_info(debug)
+                        if player.stash == 0:
+                            print(f'{player.name} wins the round')
 
-    # dd = defaultdict(list)
-    # dd['1'].append('a')
-    # dd['2'].append('b')
-    # dd['1'].append('c')
-    # print(dd)
-    # print(type(dd['1']))
+                else:
+                    if rummy.play():
+                        continue
+                    if debug:
+                        print(f'{player.name} Plays')
+                    player_info = player.get_info(debug)
+                    action_taken = np.random.choice(1)
+                    if debug:
+                        print(f'Card in pile {player_info["PileSuit"]}{player_info["PileRank"]}')
+                    result_1 = rummy.pick_card(player, action_taken)
+                    result_1 = result_1["reward"]
 
-    # p1= Player(name='jawad')
-    # p1.get_info(True)
+                    if debug:
+                        print(f'{player.name} takes action {action_taken}')
+                    # player stash will have no cards if the player has melded them
+                    # When you have picked up a card and you have drop it since the remaining cards have been melded.
+                    if len(player.stash) == 1:
+                        rummy.drop_card(player, player.stash[0])
+                        if debug:
+                            print(f'{player.name} Wins the round')
+
+                    elif len(player.stash) != 0:
+
+                        player_info = player.get_info(debug)
+                        s = player_info['CardRanks']
+                        action_taken = np.random.choice(4)
+                        card = player.stash[action_taken]
+                        if debug:
+                            print(f'{player.name} drops card {card}')
+
+                        result_1 = rummy.drop_card(player, card)
+                        result_1 = result_1["reward"]
+                    #                             pdb.set_trace()
+                    else:
+                        if debug:
+                            print(f'{player.name} Wins the round')
+                    if debug:
+                        player.get_info(debug)
+
