@@ -405,18 +405,16 @@ if __name__ == '__main__':
     # a: 0 - loop  1 - to next state
     # r:       +1                 +0      +100 when reaches 4
     #
-    n_states = 5
-    n_actions = 2
+    n_states = 26
+    n_actions = 14
 
 
     def transition(s, a):
         s1 = s + a
-        if s == s1:
-            r = 1
-        elif s1 == n_states - 1:
-            r = 100
+        if s1 == 3:
+            r = 1000
         else:
-            r = 0
+            r = (s - s1)**2
         return s1, r
 
 
@@ -430,29 +428,33 @@ if __name__ == '__main__':
     # Example TD(0) Update
     alpha = 1.0
     gamma = 0.9
-    V = np.zeros(n_states)  # 5 states
-    pi = np.random.randint(n_actions, size=n_states) # (0, 2) meaning -> 0, 1
+    V = np.zeros(n_states)  # 4 states
+    # pi = np.random.randint(n_actions, size=n_states) # (0, 2) meaning -> 0, 1
 
     np.set_printoptions(precision=2)
-    for k in range(2):
-        if k == 1:  # on the second iteration it is taking always to next step
-            pi = np.ones(n_states, dtype=np.int)
-        print("Policy:", pi)
+    for k in range(1):
+        # if k == 1:  # on the second iteration it is taking always to next step
+        #     pi = np.ones(n_states, dtype=np.int)
+        # print("Policy:", pi)
         # Evaluation of the random policy
-        for e in range(20):
-            s = 0
-
+        for e in range(10):
+            s = 28
             print("\r\tTraj: ", s, end=" ")
-            for step in range(10):
-                a = pi[s]
+            # print("Policy:", pi)
+            for step in range(100):
+                if s < 10:
+                    pi = np.random.randint(3-s, 8, size=n_states)
+                elif s > 21:
+                    pi = np.random.randint(-7, 1+28-s, size=n_states)
+                else:
+                    pi = np.random.randint(-7, 8, size=n_states)
+                a = pi[s-3]
                 s1, r1 = transition(s, a)
-                V[s] += alpha * (r1 + gamma * V[s1] - V[s])
+                V[s-3] += alpha * (r1 + gamma * V[s1-3] - V[s-3])
                 s = s1
-
-                print(a, s, end=" ")
-                if s == n_states - 1:
+                # print(a, s, end=" ==> ")
+                if s == 3:
                     break
-
             print("\t", V, end="\n")
             # pause_print()
         print()
