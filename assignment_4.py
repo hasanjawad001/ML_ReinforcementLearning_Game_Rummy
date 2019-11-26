@@ -270,6 +270,16 @@ class RLAgent:
 
     """
 
+    def printQ(self):
+        for i in range(7):
+            for j in range(7):
+                for k in range(7):
+                    for l in range(7):
+                        for m in range(2):
+                            for n in range(4):
+                                if self.Q[i,j,k,l,m,n] > 0:
+                                    print(i,j,k,l,m,n)
+
     def __init__(self, env):
         self.env = env
         self.states = self.get_states()
@@ -277,15 +287,7 @@ class RLAgent:
         self.n_a = len(self.actions)
         self.n_s = len(self.states)
         self.Q = np.zeros(( len(RANK), len(RANK), len(RANK), len(RANK), len([0,1]), len([0,1,2,3])  ))
-        c=0
-        for i in range(7):
-            for j in range(7):
-                for k in range(7):
-                    for l in range(7):
-                        for m in range(2):
-                            for n in range(4):
-                                self.Q[i,j,k,l,m,n]=c
-                                c+=1
+
 
     def get_states(self):
         states = []
@@ -372,6 +374,11 @@ class RLAgent:
                         result_1 = rummy.pick_card(player, a)
                         r1 = result_1["reward"]
                         s1 = [player.stash[0].rank_to_val, player.stash[1].rank_to_val, player.stash[2].rank_to_val, player.stash[3].rank_to_val]
+                        a1 = self.epsilon_greed(0.1, s1, type='pick')
+                        self.Q[s[0]-1, s[1]-1, s[2]-1, s[3]-1, a, :] += 0.1 * (
+                                r1 +  0.99*self.Q[s1[0]-1, s1[1]-1, s1[2]-1, s1[3]-1, a1, :] - self.Q[s[0]-1, s[1]-1, s[2]-1, s[3]-1, a, :]
+                        )
+                        # self.printQ()
                         #1e: pick ###################################################################################
                         if debug:
                             print(f'{player.name} takes action {a}')
@@ -395,6 +402,14 @@ class RLAgent:
                                 print(f'{player.name} drops card {card}')
                             result_1 = rummy.drop_card(player, card)
                             r1 = result_1["reward"]
+
+                            s1 = [player.stash[0].rank_to_val, player.stash[1].rank_to_val, player.stash[2].rank_to_val,
+                                  rummy.pile[-1].rank_to_val]
+                            a1 = self.epsilon_greed(0.1, s1, type='drop')
+                            self.Q[s[0] - 1, s[1] - 1, s[2] - 1, s[3] - 1, :, a] += 0.1 * (
+                                    r1 + 0.99 * self.Q[s1[0] - 1, s1[1] - 1, s1[2] - 1, s1[3] - 1, :, a1] -
+                                    self.Q[s[0] - 1, s[1] - 1, s[2] - 1, s[3] - 1, :, a]
+                            )
                             #2e: drop ###################################################################################
                         #                             pdb.set_trace()
                         else:
