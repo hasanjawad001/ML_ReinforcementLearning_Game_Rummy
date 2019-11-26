@@ -105,12 +105,22 @@ class Player:
         pileset = None
         pile = None
         for card in self.stash:
-            card_suits.append(RANK_VALUE[card.rank])
-            card_ranks.append(card.suit)
+            card_ranks.append(RANK_VALUE[card.rank])
+            card_suits.append(card.suit)
         if len(self.game.pile) > 0:
-            return {"Stash Score": self.stash_score(), "CardSuit": card_suits, "CardRanks": card_ranks,
-                    "PileRank": self.game.pile[-1].rank, "PileSuit": self.game.pile[-1].suit}
-        return {"Stash Score": self.stash_score(), "CardSuit": card_suits, "CardRanks": card_ranks}
+            return {
+                "Stash Score": self.stash_score(),
+                "CardSuit": card_suits,
+                "CardRanks": card_ranks,
+                "PileRank": self.game.pile[-1].rank,
+                "PileSuit": self.game.pile[-1].suit
+            }
+
+        return {
+            "Stash Score": self.stash_score(),
+            "CardSuit": card_suits,
+            "CardRanks": card_ranks
+        }
 
 
 class RummyAgent():
@@ -238,173 +248,149 @@ class RLAgent:
 
     def __init__(self, env):
         self.env = env
-        self.size = env.get_size()
-        self.n_a = len(env.get_actions())
-        # self.Q table including the surrounding border
-        self.Q = np.zeros((self.size[0], self.size[1], self.n_a))
+        self.states = self.get_states()
+        self.actions = self.get_actions()
+        self.n_a = len(self.actions)
+        self.n_s = len(self.states)
+        self.Q = np.zeros(( len(RANK), len(RANK), len(RANK), len(RANK), len([0,1]), len([0,1,2,3])  ))
+        c=0
+        for i in range(7):
+            for j in range(7):
+                for k in range(7):
+                    for l in range(7):
+                        for m in range(2):
+                            for n in range(4):
+                                self.Q[i,j,k,l,m,n]=c
+                                c+=1
 
-    def epsilon_greed(self, epsilon, s):
-        if np.random.uniform() < epsilon:
-            a = np.random.randint(self.n_a)
+    def get_states(self):
+        states = []
+        for fi in RANK:
+            for s in RANK:
+                for t in RANK:
+                    for fo in RANK:
+                        state = [
+                            RANK_VALUE[fi],
+                            RANK_VALUE[s],
+                            RANK_VALUE[t],
+                            RANK_VALUE[fo]
+                        ]
+                        states.append(state)
+        return states
+
+    def get_actions(self):
+        pick = list(range(0, 2))
+        drop = list(range(0, 4))
+        actions = []
+        for p in pick:
+            for d in drop:
+                action = [p,d]
+                actions.append(action)
+        return actions
+
+    def epsilon_greed(self, epsilon, s, type):
+        if type == 'pick':
+            if np.random.uniform() < epsilon:
+                index = np.random.randint(2)
+            else:
+                index = np.where(self.Q[s[0], s[1], s[2], s[3], :, 0] == np.max(self.Q[s[0], s[1], s[2], s[3], :, 0]))[0][0]
         else:
-            i_max = np.where(self.Q[s[0], s[1], :] == np.max(self.Q[s[0], s[1], :]))[0]
-            a = int(np.random.choice(i_max))
-        return a
+            if np.random.uniform() < epsilon:
+                index = np.random.randint(4)
+            else:
+                index = np.where(self.Q[s[0], s[1], s[2], s[3], 0, :] == np.max(self.Q[s[0], s[1], s[2], s[3], 0, :]))[0][0]
+        return index
 
-    def train(self, start, **params):
+    def get_action_taken(self, player_info={}, type='', train=True):
+        epsilon = 0.1 if train else 0
+        if type == 'pick':
+            card_ranks = player_info['CardRanks']
+            pile_rank = player_info['PileRank']
+            s = [card_ranks[0], card_ranks[1], card_ranks[2], int(pile_rank)]
+            r = self.epsilon_greed(epsilon, s, type=type)
+        else:
+            card_ranks = player_info['CardRanks']
+            s = (card_ranks[0], card_ranks[1], card_ranks[2], card_ranks[3])
+            r = self.epsilon_greed(epsilon, s, type=type)
+        return r
 
-        # parameters
-        gamma = params.pop('gamma', 0.99)
-        alpha = params.pop('alpha', 0.1)
-        epsilon = params.pop('epsilon', 0.1)
-        maxiter = params.pop('maxiter', 1000)
-        maxstep = params.pop('maxstep', 1000)
-
-        # init self.Q matrix
-        self.Q[...] = 0
-        self.Q[self.env._map == 'H'] = -np.inf
-
-        # online train
-        # rewards and step trace
-        rtrace = []
-        steps = []
+    def train(self):
+        maxiter = 1
+        debug = True
         for j in range(maxiter):
+            for player in rummy.players:
+                player.points = player.stash_score()
 
-            env.init(start)
-            s = env.get_cur_state()
-            # selection an action
-            a = self.epsilon_greed(epsilon, s)
+            rummy.reset(rummy.players)
+            random.shuffle(rummy.players)
+            # int i = 0
+            if debug:
+                print(f'**********************************\n\t\tGame Starts : {j}\n***********************************')
+            while not rummy.play():
+                rummy._update_turn()
+                print(rummy.max_turns)
+                for player in rummy.players:
+                    if player.isBot:
+                        if rummy.play():
+                            continue
+                        if debug:
+                            print(f'{player.name} Plays')
+                        rummy.computer_play(player)
+                        if debug:
+                            player.get_info(debug)
+                            if player.stash == 0:
+                                print(f'{player.name} wins the round')
 
-            rewards = []
-            trace = np.array(coord_convert(s, self.size))
-            # run simulation for max number of steps
-            for step in range(maxstep):
-                # move
-                r = env.next(a)
-                s1 = env.get_cur_state()
-                a1 = self.epsilon_greed(epsilon, s1)
+                    else:
+                        if rummy.play():
+                            continue
+                        if debug:
+                            print(f'{player.name} Plays')
+                        player_info = player.get_info(debug)
+                        # action_taken = np.random.choice(1)
+                        action_taken = r.get_action_taken(player_info=player_info, type='pick', train=True)
+                        if debug:
+                            print(f'Card in pile {player_info["PileSuit"]}{player_info["PileRank"]}')
+                        result_1 = rummy.pick_card(player, action_taken)
+                        result_1 = result_1["reward"]
 
-                rewards.append(r)
-                trace = np.vstack((trace, coord_convert(s1, self.size)))
+                        if debug:
+                            print(f'{player.name} takes action {action_taken}')
+                        # player stash will have no cards if the player has melded them
+                        # When you have picked up a card and you have drop it since the remaining cards have been melded.
+                        if len(player.stash) == 1:
+                            rummy.drop_card(player, player.stash[0])
+                            if debug:
+                                print(f'{player.name} Wins the round')
 
-                # ToDo: update self.Q table (SARSA)
+                        elif len(player.stash) != 0:
 
-                if env.is_goal():  # reached the goal
-                    # ToDo: update Q table
+                            player_info = player.get_info(debug)
+                            s = player_info['CardRanks']
+                            # action_taken = np.random.choice(4)
+                            action_taken = r.get_action_taken(player_info=player_info, type='drop', train=True)
+                            card = player.stash[action_taken]
+                            if debug:
+                                print(f'{player.name} drops card {card}')
 
-                    break
+                            result_1 = rummy.drop_card(player, card)
+                            result_1 = result_1["reward"]
+                        #                             pdb.set_trace()
+                        else:
+                            if debug:
+                                print(f'{player.name} Wins the round')
+                        if debug:
+                            player.get_info(debug)
+        return self.Q
 
-                s = s1
-                a = a1
-
-            rtrace.append(np.sum(rewards))
-            steps.append(step + 1)
-        return rtrace, steps, trace  # last trace of trajectory
-
-    def test(self, start, maxstep=1000):
-
-        #### ToDo: Here is one episode of simulation for testing.
-        ####       Add one line to make this code test the trained agent
-
-        env.init(start)
-        s = env.get_cur_state()
-        # selection an action
-        a = self.epsilon_greed(epsilon, s)
-
-        trace = np.array(coord_convert(s, self.size))
-        # run simulation for max number of steps
-        for step in range(maxstep):
-            # move
-            r = env.next(a)
-            s1 = env.get_cur_state()
-            a1 = self.epsilon_greed(epsilon, s1)
-
-            trace = np.vstack((trace, coord_convert(s1, self.size)))
-
-            if env.is_goal():  # reached the goal
-                break
-
-            s = s1
-            a = a1
-
-        return trace
+    def test(self):
+        return None
 
 if __name__ == '__main__':
     p1 = Player('jawad', list())
     p2 = Player('comp1', list(), isBot=True)
     rummy = RummyAgent([p1, p2], max_card_length=3, max_turns=20)
+    r = RLAgent(rummy)
+    r.train()
+    r.test()
 
-    agent = RLAgent(rummy)
-    start = [0, 0]
-    rtrace, steps, trace = agent.train(start,
-                                       amma=0.99,
-                                       alpha=0.1,
-                                       epsilon=0.1,
-                                       maxiter=100,
-                                       maxstep=1000)
-
-    # maxiter = 3
-    # debug = True
-    # for j in range(maxiter):
-    #     for player in rummy.players:
-    #         player.points = player.stash_score()
-    #
-    #     rummy.reset(rummy.players)
-    #     random.shuffle(rummy.players)
-    #     # int i = 0
-    #     if debug:
-    #         print(f'**********************************\n\t\tGame Starts : {j}\n***********************************')
-    #     while not rummy.play():
-    #         rummy._update_turn()
-    #         print(rummy.max_turns)
-    #         for player in rummy.players:
-    #             if player.isBot:
-    #                 if rummy.play():
-    #                     continue
-    #                 if debug:
-    #                     print(f'{player.name} Plays')
-    #                 rummy.computer_play(player)
-    #                 if debug:
-    #                     player.get_info(debug)
-    #                     if player.stash == 0:
-    #                         print(f'{player.name} wins the round')
-    #
-    #             else:
-    #                 if rummy.play():
-    #                     continue
-    #                 if debug:
-    #                     print(f'{player.name} Plays')
-    #                 player_info = player.get_info(debug)
-    #                 action_taken = np.random.choice(1)
-    #                 if debug:
-    #                     print(f'Card in pile {player_info["PileSuit"]}{player_info["PileRank"]}')
-    #                 result_1 = rummy.pick_card(player, action_taken)
-    #                 result_1 = result_1["reward"]
-    #
-    #                 if debug:
-    #                     print(f'{player.name} takes action {action_taken}')
-    #                 # player stash will have no cards if the player has melded them
-    #                 # When you have picked up a card and you have drop it since the remaining cards have been melded.
-    #                 if len(player.stash) == 1:
-    #                     rummy.drop_card(player, player.stash[0])
-    #                     if debug:
-    #                         print(f'{player.name} Wins the round')
-    #
-    #                 elif len(player.stash) != 0:
-    #
-    #                     player_info = player.get_info(debug)
-    #                     s = player_info['CardRanks']
-    #                     action_taken = np.random.choice(4)
-    #                     card = player.stash[action_taken]
-    #                     if debug:
-    #                         print(f'{player.name} drops card {card}')
-    #
-    #                     result_1 = rummy.drop_card(player, card)
-    #                     result_1 = result_1["reward"]
-    #                 #                             pdb.set_trace()
-    #                 else:
-    #                     if debug:
-    #                         print(f'{player.name} Wins the round')
-    #                 if debug:
-    #                     player.get_info(debug)
-    #
