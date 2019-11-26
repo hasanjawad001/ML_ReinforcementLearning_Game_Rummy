@@ -168,16 +168,29 @@ class RummyAgent():
         self.pile.append(card)
 
     def pick_card(self, player, action):
+        ss_before = int(player.stash_score())
         if action == 0:
             self.pick_from_pile(player)
         else:
             self.pick_from_deck(player)
-        if player.meld():
-            return {"reward": 10}
-        else:
-            return {"reward": -1}
+        ss_after = int(player.stash_score())
+        ss_delta = ss_before - ss_after
+        unique_rank_list = list(set([card.rank_to_val for card in player.stash]))
+        unique_length = len(unique_rank_list)
 
-    #             return -player.stash_score()
+        if player.meld():
+            reward = 100
+        elif unique_length == 1:
+            reward = 50
+        elif unique_length == 2:
+            reward = 40
+        elif unique_length == 3:
+            reward = 30
+        else:
+            reward = 2 * ss_delta
+        return {"reward": reward}
+
+
 
     def pick_from_pile(self, player):
         card = self.pile[-1]
@@ -196,8 +209,19 @@ class RummyAgent():
             return return_player[0]
 
     def drop_card(self, player, card):
+        ss_before = int(player.stash_score())
         player.drop_card(card)
-        return {"reward": -1}
+        ss_after = int(player.stash_score())
+        ss_delta = ss_before - ss_after
+        unique_rank_list = list(set([card.rank_to_val for card in player.stash]))
+        unique_length = len(unique_rank_list)
+        if unique_length == 1:
+            reward = 50
+        elif unique_length == 2:
+            reward = 40
+        else:
+            reward = 2 * ss_delta
+        return {"reward": reward}
 
     def computer_play(self, player):
         # Gets a card from deck or pile
@@ -289,30 +313,22 @@ class RLAgent:
         return actions
 
     def epsilon_greed(self, epsilon, s, type):
+        i0 = s[0] - 1
+        i1 = s[1] - 1
+        i2 = s[2] - 1
+        i3 = s[3] - 1
         if type == 'pick':
             if np.random.uniform() < epsilon:
                 index = np.random.randint(2)
             else:
-                index = np.where(self.Q[s[0], s[1], s[2], s[3], :, 0] == np.max(self.Q[s[0], s[1], s[2], s[3], :, 0]))[0][0]
+                index = np.where(self.Q[i0, i1, i2, i3, :, 0] == np.max(self.Q[i0, i1, i2, i3, :, 0]))[0][0]
         else:
             if np.random.uniform() < epsilon:
                 index = np.random.randint(4)
             else:
-                index = np.where(self.Q[s[0], s[1], s[2], s[3], 0, :] == np.max(self.Q[s[0], s[1], s[2], s[3], 0, :]))[0][0]
+                index = np.where(self.Q[i0, i1, i2, i3, 0, :] == np.max(self.Q[i0, i1, i2, i3, 0, :]))[0][0]
         return index
 
-    def get_action_taken(self, player_info={}, type='', train=True):
-        epsilon = 0.1 if train else 0
-        if type == 'pick':
-            card_ranks = player_info['CardRanks']
-            pile_rank = player_info['PileRank']
-            s = [card_ranks[0], card_ranks[1], card_ranks[2], int(pile_rank)]
-            r = self.epsilon_greed(epsilon, s, type=type)
-        else:
-            card_ranks = player_info['CardRanks']
-            s = (card_ranks[0], card_ranks[1], card_ranks[2], card_ranks[3])
-            r = self.epsilon_greed(epsilon, s, type=type)
-        return r
 
     def train(self):
         maxiter = 1
@@ -347,15 +363,18 @@ class RLAgent:
                         if debug:
                             print(f'{player.name} Plays')
                         player_info = player.get_info(debug)
+                        #1s: pick ###################################################################################
                         # action_taken = np.random.choice(1)
-                        action_taken = r.get_action_taken(player_info=player_info, type='pick', train=True)
+                        s = [player.stash[0].rank_to_val, player.stash[1].rank_to_val, player.stash[2].rank_to_val, rummy.pile[-1].rank_to_val]
+                        a = self.epsilon_greed(0.1, s, type='pick')
                         if debug:
                             print(f'Card in pile {player_info["PileSuit"]}{player_info["PileRank"]}')
-                        result_1 = rummy.pick_card(player, action_taken)
-                        result_1 = result_1["reward"]
-
+                        result_1 = rummy.pick_card(player, a)
+                        r1 = result_1["reward"]
+                        s1 = [player.stash[0].rank_to_val, player.stash[1].rank_to_val, player.stash[2].rank_to_val, player.stash[3].rank_to_val]
+                        #1e: pick ###################################################################################
                         if debug:
-                            print(f'{player.name} takes action {action_taken}')
+                            print(f'{player.name} takes action {a}')
                         # player stash will have no cards if the player has melded them
                         # When you have picked up a card and you have drop it since the remaining cards have been melded.
                         if len(player.stash) == 1:
@@ -367,14 +386,16 @@ class RLAgent:
 
                             player_info = player.get_info(debug)
                             s = player_info['CardRanks']
+                            #2s: drop ###################################################################################
                             # action_taken = np.random.choice(4)
-                            action_taken = r.get_action_taken(player_info=player_info, type='drop', train=True)
-                            card = player.stash[action_taken]
+                            s = [player.stash[0].rank_to_val, player.stash[1].rank_to_val, player.stash[2].rank_to_val, player.stash[3].rank_to_val]
+                            a = self.epsilon_greed(0.1, s, type='drop')
+                            card = player.stash[a]
                             if debug:
                                 print(f'{player.name} drops card {card}')
-
                             result_1 = rummy.drop_card(player, card)
-                            result_1 = result_1["reward"]
+                            r1 = result_1["reward"]
+                            #2e: drop ###################################################################################
                         #                             pdb.set_trace()
                         else:
                             if debug:
