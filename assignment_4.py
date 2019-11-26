@@ -168,27 +168,27 @@ class RummyAgent():
         self.pile.append(card)
 
     def pick_card(self, player, action):
+        before_unique_rank_list = list(set([card.rank_to_val for card in player.stash]))
+        before_unique_length = len(before_unique_rank_list)
         ss_before = int(player.stash_score())
         if action == 0:
             self.pick_from_pile(player)
         else:
             self.pick_from_deck(player)
+        after_unique_rank_list = list(set([card.rank_to_val for card in player.stash]))
+        after_unique_length = len(after_unique_rank_list)
         ss_after = int(player.stash_score())
-        ss_delta = ss_before - ss_after
-        unique_rank_list = list(set([card.rank_to_val for card in player.stash]))
-        unique_length = len(unique_rank_list)
+        ss_delta = ss_after - ss_before
+
+        s = [player.stash[0].rank_to_val, player.stash[1].rank_to_val, player.stash[2].rank_to_val, player.stash[3].rank_to_val]
 
         if player.meld():
             reward = 100
-        elif unique_length == 1:
-            reward = 50
-        elif unique_length == 2:
-            reward = 40
-        elif unique_length == 3:
-            reward = 30
+        elif after_unique_length == before_unique_length:
+            reward = 80
         else:
-            reward = 2 * ss_delta
-        return {"reward": reward}
+            reward = -3 * ss_delta
+        return {"reward": reward, "state": s}
 
 
 
@@ -209,18 +209,19 @@ class RummyAgent():
             return return_player[0]
 
     def drop_card(self, player, card):
+        before_unique_rank_list = list(set([card.rank_to_val for card in player.stash]))
+        before_unique_length = len(before_unique_rank_list)
         ss_before = int(player.stash_score())
         player.drop_card(card)
+        after_unique_rank_list = list(set([card.rank_to_val for card in player.stash]))
+        after_unique_length = len(after_unique_rank_list)
         ss_after = int(player.stash_score())
-        ss_delta = ss_before - ss_after
-        unique_rank_list = list(set([card.rank_to_val for card in player.stash]))
-        unique_length = len(unique_rank_list)
-        if unique_length == 1:
-            reward = 50
-        elif unique_length == 2:
-            reward = 40
+        ss_delta = ss_after - ss_before
+
+        if before_unique_length  == after_unique_length:
+            reward = -80
         else:
-            reward = 2 * ss_delta
+            reward = -3 * ss_delta
         return {"reward": reward}
 
     def computer_play(self, player):
@@ -333,7 +334,7 @@ class RLAgent:
 
 
     def train(self):
-        maxiter = 100
+        maxiter = 1000
         debug = True
         for j in range(maxiter):
             # self.printQ()
@@ -368,24 +369,26 @@ class RLAgent:
                         player_info = player.get_info(debug)
                         #1s: pick ###################################################################################
                         # action_taken = np.random.choice(1)
-                        try:
-                            s = [player.stash[0].rank_to_val, player.stash[1].rank_to_val, player.stash[2].rank_to_val,
-                                 rummy.pile[-1].rank_to_val]
-                        except Exception as e:
-                            break
+                        i0_rank_to_val =player.stash[0].rank_to_val
+                        i1_rank_to_val =player.stash[1].rank_to_val
+                        i2_rank_to_val =player.stash[2].rank_to_val
+                        card_pile_rank_to_val = rummy.pile[-1].rank_to_val
+                        s = [
+                            i0_rank_to_val,
+                            i1_rank_to_val,
+                            i2_rank_to_val,
+                            card_pile_rank_to_val
+                        ]
                         a = self.epsilon_greed(0.1, s, type='pick')
                         if debug:
                             print(f'Card in pile {player_info["PileSuit"]}{player_info["PileRank"]}')
                         result_1 = rummy.pick_card(player, a)
                         r1 = result_1["reward"]
-                        try:
-                            s1 = [player.stash[0].rank_to_val, player.stash[1].rank_to_val, player.stash[2].rank_to_val, player.stash[3].rank_to_val]
-                        except Exception as e:
-                            print(player.stash)
-                            break
+                        s1 = result_1["state"]
                         a1 = self.epsilon_greed(0.1, s1, type='drop')
-                        self.Q[s[0]-1, s[1]-1, s[2]-1, s[3]-1, a, :] += 0.1 * (
-                                r1 +  0.99*self.Q[s1[0]-1, s1[1]-1, s1[2]-1, s1[3]-1, 0, a1] - self.Q[s[0]-1, s[1]-1, s[2]-1, s[3]-1, a, 0]
+                        self.Q[s[0] - 1, s[1] - 1, s[2] - 1, s[3] - 1, a, :] += 0.1 * (
+                                r1 + 0.99 * self.Q[s1[0] - 1, s1[1] - 1, s1[2] - 1, s1[3] - 1, 0, a1] - self.Q[
+                            s[0] - 1, s[1] - 1, s[2] - 1, s[3] - 1, a, 0]
                         )
                         s = s1
                         a = a1
@@ -413,8 +416,13 @@ class RLAgent:
                                 print(f'{player.name} drops card {card}')
                             result_1 = rummy.drop_card(player, card)
                             r1 = result_1["reward"]
-                            s1 = [player.stash[0].rank_to_val, player.stash[1].rank_to_val, player.stash[2].rank_to_val,
-                                  rummy.pile[-1].rank_to_val]
+                            card_pile_rank_to_val = rummy.pile[-1].rank_to_val
+                            s1 = [
+                                player.stash[0].rank_to_val,
+                                player.stash[1].rank_to_val,
+                                player.stash[2].rank_to_val,
+                                card_pile_rank_to_val
+                            ]
                             a1 = self.epsilon_greed(0.1, s1, type='pick')
                             self.Q[s[0] - 1, s[1] - 1, s[2] - 1, s[3] - 1, :, a] += 0.1 * (
                                     r1 + 0.99 * self.Q[s1[0] - 1, s1[1] - 1, s1[2] - 1, s1[3] - 1, a1, 0] -
