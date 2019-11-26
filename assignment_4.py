@@ -334,7 +334,8 @@ class RLAgent:
 
 
     def train(self):
-        maxiter = 1000
+        maxiter = 10000
+        w=0
         debug = True
         for j in range(maxiter):
             # self.printQ()
@@ -379,13 +380,13 @@ class RLAgent:
                             i2_rank_to_val,
                             card_pile_rank_to_val
                         ]
-                        a = self.epsilon_greed(0.1, s, type='pick')
+                        a = self.epsilon_greed(0.05, s, type='pick')
                         if debug:
                             print(f'Card in pile {player_info["PileSuit"]}{player_info["PileRank"]}')
                         result_1 = rummy.pick_card(player, a)
                         r1 = result_1["reward"]
                         s1 = result_1["state"]
-                        a1 = self.epsilon_greed(0.1, s1, type='drop')
+                        a1 = self.epsilon_greed(0.05, s1, type='drop')
                         self.Q[s[0] - 1, s[1] - 1, s[2] - 1, s[3] - 1, a, :] += 0.1 * (
                                 r1 + 0.99 * self.Q[s1[0] - 1, s1[1] - 1, s1[2] - 1, s1[3] - 1, 0, a1] - self.Q[
                             s[0] - 1, s[1] - 1, s[2] - 1, s[3] - 1, a, 0]
@@ -402,6 +403,7 @@ class RLAgent:
                             rummy.drop_card(player, player.stash[0])
                             if debug:
                                 print(f'{player.name} Wins the round')
+                                w+=1
 
                         elif len(player.stash) != 0:
 
@@ -423,7 +425,7 @@ class RLAgent:
                                 player.stash[2].rank_to_val,
                                 card_pile_rank_to_val
                             ]
-                            a1 = self.epsilon_greed(0.1, s1, type='pick')
+                            a1 = self.epsilon_greed(0.05, s1, type='pick')
                             self.Q[s[0] - 1, s[1] - 1, s[2] - 1, s[3] - 1, :, a] += 0.1 * (
                                     r1 + 0.99 * self.Q[s1[0] - 1, s1[1] - 1, s1[2] - 1, s1[3] - 1, a1, 0] -
                                     self.Q[s[0] - 1, s[1] - 1, s[2] - 1, s[3] - 1, 0, a]
@@ -435,8 +437,10 @@ class RLAgent:
                         else:
                             if debug:
                                 print(f'{player.name} Wins the round')
+                                w+=1
                         if debug:
                             player.get_info(debug)
+        print('====================================================', w)
         return self.Q
 
     def test(self):
