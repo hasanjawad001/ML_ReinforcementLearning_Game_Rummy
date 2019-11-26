@@ -336,7 +336,7 @@ class RLAgent:
     def train(self):
         maxiter = 10000
         w=0
-        debug = True
+        debug = False
         for j in range(maxiter):
             # self.printQ()
             for player in rummy.players:
@@ -349,7 +349,8 @@ class RLAgent:
                 print(f'**********************************\n\t\tGame Starts : {j}\n***********************************')
             while not rummy.play():
                 rummy._update_turn()
-                print(rummy.max_turns)
+                if debug:
+                    print(rummy.max_turns)
                 for player in rummy.players:
                     if player.isBot:
                         if rummy.play():
@@ -382,7 +383,9 @@ class RLAgent:
                         ]
                         a = self.epsilon_greed(0.05, s, type='pick')
                         if debug:
-                            print(f'Card in pile {player_info["PileSuit"]}{player_info["PileRank"]}')
+                            print(f'Card in pile {player_info["PileRank"]}{player_info["PileSuit"]}')
+                        if debug:
+                            print(f'{player.name} takes action {a}')
                         result_1 = rummy.pick_card(player, a)
                         r1 = result_1["reward"]
                         s1 = result_1["state"]
@@ -395,19 +398,19 @@ class RLAgent:
                         a = a1
                         # self.printQ()
                         #1e: pick ###################################################################################
-                        if debug:
-                            print(f'{player.name} takes action {a}')
                         # player stash will have no cards if the player has melded them
                         # When you have picked up a card and you have drop it since the remaining cards have been melded.
                         if len(player.stash) == 1:
                             rummy.drop_card(player, player.stash[0])
+                            w += 1
                             if debug:
                                 print(f'{player.name} Wins the round')
-                                w+=1
 
                         elif len(player.stash) != 0:
 
                             player_info = player.get_info(debug)
+                            if debug:
+                                print(f'{player.name} takes action {a}')
                             # s = player_info['CardRanks']
                             #2s: drop ###################################################################################
                             # action_taken = np.random.choice(4)
@@ -435,15 +438,120 @@ class RLAgent:
                             #2e: drop ###################################################################################
                         #                             pdb.set_trace()
                         else:
+                            w += 1
                             if debug:
                                 print(f'{player.name} Wins the round')
-                                w+=1
                         if debug:
                             player.get_info(debug)
-        print('====================================================', w)
+        if debug:
+            print('====================================================', w)
         return self.Q
 
     def test(self):
+        maxiter = 1
+        debug = True
+        for j in range(maxiter):
+            for player in rummy.players:
+                player.points = player.stash_score()
+            rummy.reset(rummy.players)
+            random.shuffle(rummy.players)
+            if debug:
+                print(f'**********************************\n\t\t Final Game Starts : {j}\n***********************************')
+            while not rummy.play():
+                rummy._update_turn()
+                if debug:
+                    print(rummy.max_turns)
+                for player in rummy.players:
+                    if player.isBot:
+                        if rummy.play():
+                            continue
+                        if debug:
+                            print(f'{player.name} Plays')
+                        rummy.computer_play(player)
+                        if debug:
+                            player.get_info(debug)
+                            if player.stash == 0:
+                                print(f'{player.name} wins the round')
+
+                    else:
+                        if rummy.play():
+                            continue
+                        if debug:
+                            print(f'{player.name} Plays')
+                        player_info = player.get_info(debug)
+                        #1s: pick ###################################################################################
+                        # action_taken = np.random.choice(1)
+                        i0_rank_to_val =player.stash[0].rank_to_val
+                        i1_rank_to_val =player.stash[1].rank_to_val
+                        i2_rank_to_val =player.stash[2].rank_to_val
+                        card_pile_rank_to_val = rummy.pile[-1].rank_to_val
+                        s = [
+                            i0_rank_to_val,
+                            i1_rank_to_val,
+                            i2_rank_to_val,
+                            card_pile_rank_to_val
+                        ]
+                        a = self.epsilon_greed(0, s, type='pick')
+                        if debug:
+                            print(f'Card in pile {player_info["PileRank"]}{player_info["PileSuit"]}')
+                        if debug:
+                            print(f'{player.name} takes action {a}')
+                        result_1 = rummy.pick_card(player, a)
+                        # r1 = result_1["reward"]
+                        s1 = result_1["state"]
+                        a1 = self.epsilon_greed(0, s1, type='drop')
+                        # self.Q[s[0] - 1, s[1] - 1, s[2] - 1, s[3] - 1, a, :] += 0.1 * (
+                        #         r1 + 0.99 * self.Q[s1[0] - 1, s1[1] - 1, s1[2] - 1, s1[3] - 1, 0, a1] - self.Q[
+                        #     s[0] - 1, s[1] - 1, s[2] - 1, s[3] - 1, a, 0]
+                        # )
+                        s = s1
+                        a = a1
+                        # self.printQ()
+                        #1e: pick ###################################################################################
+
+                        # player stash will have no cards if the player has melded them
+                        # When you have picked up a card and you have drop it since the remaining cards have been melded.
+                        if len(player.stash) == 1:
+                            rummy.drop_card(player, player.stash[0])
+                            if debug:
+                                print(f'{player.name} Wins the round')
+
+                        elif len(player.stash) != 0:
+
+                            player_info = player.get_info(debug)
+                            if debug:
+                                print(f'{player.name} takes action {a}')
+                            # s = player_info['CardRanks']
+                            #2s: drop ###################################################################################
+                            # action_taken = np.random.choice(4)
+                            # s = [player.stash[0].rank_to_val, player.stash[1].rank_to_val, player.stash[2].rank_to_val, player.stash[3].rank_to_val]
+                            # a = self.epsilon_greed(0.1, s, type='drop')
+                            card = player.stash[a]
+                            if debug:
+                                print(f'{player.name} drops card {card}')
+                            result_1 = rummy.drop_card(player, card)
+                            # r1 = result_1["reward"]
+                            # card_pile_rank_to_val = rummy.pile[-1].rank_to_val
+                            # s1 = [
+                            #     player.stash[0].rank_to_val,
+                            #     player.stash[1].rank_to_val,
+                            #     player.stash[2].rank_to_val,
+                            #     card_pile_rank_to_val
+                            # ]
+                            # a1 = self.epsilon_greed(0.05, s1, type='pick')
+                            # self.Q[s[0] - 1, s[1] - 1, s[2] - 1, s[3] - 1, :, a] += 0.1 * (
+                            #         r1 + 0.99 * self.Q[s1[0] - 1, s1[1] - 1, s1[2] - 1, s1[3] - 1, a1, 0] -
+                            #         self.Q[s[0] - 1, s[1] - 1, s[2] - 1, s[3] - 1, 0, a]
+                            # )
+                            # s=s1
+                            # a=a1
+                            #2e: drop ###################################################################################
+                        #                             pdb.set_trace()
+                        else:
+                            if debug:
+                                print(f'{player.name} Wins the round')
+                        if debug:
+                            player.get_info(debug)
         return None
 
 if __name__ == '__main__':
@@ -452,5 +560,6 @@ if __name__ == '__main__':
     rummy = RummyAgent([p1, p2], max_card_length=3, max_turns=20)
     r = RLAgent(rummy)
     r.train()
-    r.test()
+    for i in range(3):
+        r.test()
 
