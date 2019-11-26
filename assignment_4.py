@@ -185,7 +185,7 @@ class RummyAgent():
         if player.meld():
             reward = 100
         elif after_unique_length == before_unique_length:
-            reward = 80
+            reward = 90
         else:
             reward = -3 * ss_delta
         return {"reward": reward, "state": s}
@@ -219,7 +219,7 @@ class RummyAgent():
         ss_delta = ss_after - ss_before
 
         if before_unique_length  == after_unique_length:
-            reward = -80
+            reward = -90
         else:
             reward = -3 * ss_delta
         return {"reward": reward}
@@ -336,6 +336,7 @@ class RLAgent:
     def train(self):
         maxiter = 10000
         w=0
+        l=0
         debug = False
         for j in range(maxiter):
             # self.printQ()
@@ -358,9 +359,11 @@ class RLAgent:
                         if debug:
                             print(f'{player.name} Plays')
                         rummy.computer_play(player)
+                        if len(player.stash) == 0:
+                            l+=1
                         if debug:
                             player.get_info(debug)
-                            if player.stash == 0:
+                            if len(player.stash) == 0:
                                 print(f'{player.name} wins the round')
 
                     else:
@@ -371,6 +374,7 @@ class RLAgent:
                         player_info = player.get_info(debug)
                         #1s: pick ###################################################################################
                         # action_taken = np.random.choice(1)
+                        epsilon=0.15
                         i0_rank_to_val =player.stash[0].rank_to_val
                         i1_rank_to_val =player.stash[1].rank_to_val
                         i2_rank_to_val =player.stash[2].rank_to_val
@@ -381,7 +385,7 @@ class RLAgent:
                             i2_rank_to_val,
                             card_pile_rank_to_val
                         ]
-                        a = self.epsilon_greed(0.05, s, type='pick')
+                        a = self.epsilon_greed(epsilon, s, type='pick')
                         if debug:
                             print(f'Card in pile {player_info["PileRank"]}{player_info["PileSuit"]}')
                         if debug:
@@ -389,7 +393,7 @@ class RLAgent:
                         result_1 = rummy.pick_card(player, a)
                         r1 = result_1["reward"]
                         s1 = result_1["state"]
-                        a1 = self.epsilon_greed(0.05, s1, type='drop')
+                        a1 = self.epsilon_greed(epsilon, s1, type='drop')
                         self.Q[s[0] - 1, s[1] - 1, s[2] - 1, s[3] - 1, a, :] += 0.1 * (
                                 r1 + 0.99 * self.Q[s1[0] - 1, s1[1] - 1, s1[2] - 1, s1[3] - 1, 0, a1] - self.Q[
                             s[0] - 1, s[1] - 1, s[2] - 1, s[3] - 1, a, 0]
@@ -428,7 +432,7 @@ class RLAgent:
                                 player.stash[2].rank_to_val,
                                 card_pile_rank_to_val
                             ]
-                            a1 = self.epsilon_greed(0.05, s1, type='pick')
+                            a1 = self.epsilon_greed(epsilon, s1, type='pick')
                             self.Q[s[0] - 1, s[1] - 1, s[2] - 1, s[3] - 1, :, a] += 0.1 * (
                                     r1 + 0.99 * self.Q[s1[0] - 1, s1[1] - 1, s1[2] - 1, s1[3] - 1, a1, 0] -
                                     self.Q[s[0] - 1, s[1] - 1, s[2] - 1, s[3] - 1, 0, a]
@@ -443,20 +447,37 @@ class RLAgent:
                                 print(f'{player.name} Wins the round')
                         if debug:
                             player.get_info(debug)
-        if debug:
-            print('====================================================', w)
+            if rummy.max_turns <=0:
+                score_bot = 0
+                score_agent = 0
+                for player in rummy.players:
+                    if player.isBot:
+                        score_bot = player.stash_score()
+                    else:
+                        score_agent = player.stash_score()
+                if score_agent < score_bot:
+                    w+=1
+                elif score_agent > score_bot:
+                    l+=1
+                else:
+                    w+=0.5
+                    l+=0.5
+        # if debug:
+        print('====================================================', w, l)
         return self.Q
 
     def test(self):
         maxiter = 1
-        debug = True
+        w=0
+        l=0
+        debug = False
         for j in range(maxiter):
             for player in rummy.players:
                 player.points = player.stash_score()
             rummy.reset(rummy.players)
             random.shuffle(rummy.players)
             if debug:
-                print(f'**********************************\n\t\t Final Game Starts : {j}\n***********************************')
+                print(f'**********************************\n\t\t Final Game Starts : \n***********************************')
             while not rummy.play():
                 rummy._update_turn()
                 if debug:
@@ -468,9 +489,11 @@ class RLAgent:
                         if debug:
                             print(f'{player.name} Plays')
                         rummy.computer_play(player)
+                        if len(player.stash) == 0:
+                            l+=1
                         if debug:
                             player.get_info(debug)
-                            if player.stash == 0:
+                            if len(player.stash) == 0:
                                 print(f'{player.name} wins the round')
 
                     else:
@@ -481,6 +504,7 @@ class RLAgent:
                         player_info = player.get_info(debug)
                         #1s: pick ###################################################################################
                         # action_taken = np.random.choice(1)
+                        epsilon=0
                         i0_rank_to_val =player.stash[0].rank_to_val
                         i1_rank_to_val =player.stash[1].rank_to_val
                         i2_rank_to_val =player.stash[2].rank_to_val
@@ -491,7 +515,7 @@ class RLAgent:
                             i2_rank_to_val,
                             card_pile_rank_to_val
                         ]
-                        a = self.epsilon_greed(0, s, type='pick')
+                        a = self.epsilon_greed(epsilon, s, type='pick')
                         if debug:
                             print(f'Card in pile {player_info["PileRank"]}{player_info["PileSuit"]}')
                         if debug:
@@ -499,7 +523,7 @@ class RLAgent:
                         result_1 = rummy.pick_card(player, a)
                         # r1 = result_1["reward"]
                         s1 = result_1["state"]
-                        a1 = self.epsilon_greed(0, s1, type='drop')
+                        a1 = self.epsilon_greed(epsilon, s1, type='drop')
                         # self.Q[s[0] - 1, s[1] - 1, s[2] - 1, s[3] - 1, a, :] += 0.1 * (
                         #         r1 + 0.99 * self.Q[s1[0] - 1, s1[1] - 1, s1[2] - 1, s1[3] - 1, 0, a1] - self.Q[
                         #     s[0] - 1, s[1] - 1, s[2] - 1, s[3] - 1, a, 0]
@@ -513,6 +537,7 @@ class RLAgent:
                         # When you have picked up a card and you have drop it since the remaining cards have been melded.
                         if len(player.stash) == 1:
                             rummy.drop_card(player, player.stash[0])
+                            w+=1
                             if debug:
                                 print(f'{player.name} Wins the round')
 
@@ -548,11 +573,27 @@ class RLAgent:
                             #2e: drop ###################################################################################
                         #                             pdb.set_trace()
                         else:
+                            w+=1
                             if debug:
                                 print(f'{player.name} Wins the round')
                         if debug:
                             player.get_info(debug)
-        return None
+            if rummy.max_turns <=0:
+                score_bot = 0
+                score_agent = 0
+                for player in rummy.players:
+                    if player.isBot:
+                        score_bot = player.stash_score()
+                    else:
+                        score_agent = player.stash_score()
+                if score_agent < score_bot:
+                    w+=1
+                elif score_agent > score_bot:
+                    l+=1
+                else:
+                    w+=0.5
+                    l+=0.5
+        return w, l
 
 if __name__ == '__main__':
     p1 = Player('jawad', list())
@@ -560,6 +601,10 @@ if __name__ == '__main__':
     rummy = RummyAgent([p1, p2], max_card_length=3, max_turns=20)
     r = RLAgent(rummy)
     r.train()
-    for i in range(3):
-        r.test()
-
+    w=0
+    l=0
+    for i in range(1000):
+        x, y = r.test()
+        w+=x
+        l+=y
+    print('====================================================', w, l)
