@@ -333,9 +333,10 @@ class RLAgent:
 
 
     def train(self):
-        maxiter = 1
+        maxiter = 100
         debug = True
         for j in range(maxiter):
+            # self.printQ()
             for player in rummy.players:
                 player.points = player.stash_score()
 
@@ -367,17 +368,27 @@ class RLAgent:
                         player_info = player.get_info(debug)
                         #1s: pick ###################################################################################
                         # action_taken = np.random.choice(1)
-                        s = [player.stash[0].rank_to_val, player.stash[1].rank_to_val, player.stash[2].rank_to_val, rummy.pile[-1].rank_to_val]
+                        try:
+                            s = [player.stash[0].rank_to_val, player.stash[1].rank_to_val, player.stash[2].rank_to_val,
+                                 rummy.pile[-1].rank_to_val]
+                        except Exception as e:
+                            break
                         a = self.epsilon_greed(0.1, s, type='pick')
                         if debug:
                             print(f'Card in pile {player_info["PileSuit"]}{player_info["PileRank"]}')
                         result_1 = rummy.pick_card(player, a)
                         r1 = result_1["reward"]
-                        s1 = [player.stash[0].rank_to_val, player.stash[1].rank_to_val, player.stash[2].rank_to_val, player.stash[3].rank_to_val]
-                        a1 = self.epsilon_greed(0.1, s1, type='pick')
+                        try:
+                            s1 = [player.stash[0].rank_to_val, player.stash[1].rank_to_val, player.stash[2].rank_to_val, player.stash[3].rank_to_val]
+                        except Exception as e:
+                            print(player.stash)
+                            break
+                        a1 = self.epsilon_greed(0.1, s1, type='drop')
                         self.Q[s[0]-1, s[1]-1, s[2]-1, s[3]-1, a, :] += 0.1 * (
-                                r1 +  0.99*self.Q[s1[0]-1, s1[1]-1, s1[2]-1, s1[3]-1, a1, :] - self.Q[s[0]-1, s[1]-1, s[2]-1, s[3]-1, a, :]
+                                r1 +  0.99*self.Q[s1[0]-1, s1[1]-1, s1[2]-1, s1[3]-1, 0, a1] - self.Q[s[0]-1, s[1]-1, s[2]-1, s[3]-1, a, 0]
                         )
+                        s = s1
+                        a = a1
                         # self.printQ()
                         #1e: pick ###################################################################################
                         if debug:
@@ -392,24 +403,25 @@ class RLAgent:
                         elif len(player.stash) != 0:
 
                             player_info = player.get_info(debug)
-                            s = player_info['CardRanks']
+                            # s = player_info['CardRanks']
                             #2s: drop ###################################################################################
                             # action_taken = np.random.choice(4)
-                            s = [player.stash[0].rank_to_val, player.stash[1].rank_to_val, player.stash[2].rank_to_val, player.stash[3].rank_to_val]
-                            a = self.epsilon_greed(0.1, s, type='drop')
+                            # s = [player.stash[0].rank_to_val, player.stash[1].rank_to_val, player.stash[2].rank_to_val, player.stash[3].rank_to_val]
+                            # a = self.epsilon_greed(0.1, s, type='drop')
                             card = player.stash[a]
                             if debug:
                                 print(f'{player.name} drops card {card}')
                             result_1 = rummy.drop_card(player, card)
                             r1 = result_1["reward"]
-
                             s1 = [player.stash[0].rank_to_val, player.stash[1].rank_to_val, player.stash[2].rank_to_val,
                                   rummy.pile[-1].rank_to_val]
-                            a1 = self.epsilon_greed(0.1, s1, type='drop')
+                            a1 = self.epsilon_greed(0.1, s1, type='pick')
                             self.Q[s[0] - 1, s[1] - 1, s[2] - 1, s[3] - 1, :, a] += 0.1 * (
-                                    r1 + 0.99 * self.Q[s1[0] - 1, s1[1] - 1, s1[2] - 1, s1[3] - 1, :, a1] -
-                                    self.Q[s[0] - 1, s[1] - 1, s[2] - 1, s[3] - 1, :, a]
+                                    r1 + 0.99 * self.Q[s1[0] - 1, s1[1] - 1, s1[2] - 1, s1[3] - 1, a1, 0] -
+                                    self.Q[s[0] - 1, s[1] - 1, s[2] - 1, s[3] - 1, 0, a]
                             )
+                            s=s1
+                            a=a1
                             #2e: drop ###################################################################################
                         #                             pdb.set_trace()
                         else:
